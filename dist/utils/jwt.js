@@ -4,7 +4,7 @@ if (!process.env.JWT_SECRET || !process.env.JWT_REFRESH_SECRET) {
 }
 export const generateAccessToken = (user) => {
     return jwt.sign({ userId: user.id }, process.env.JWT_SECRET, {
-        expiresIn: "1h", // Increased slightly for better UX
+        expiresIn: "1m", // Increased slightly for better UX
     });
 };
 export const generateRefreshToken = (user) => {

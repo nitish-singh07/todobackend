@@ -2,7 +2,7 @@ import type { Request, Response } from "express";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcrypt";
 import { pool } from "../config/db.js";
-import { generateAccessToken } from "../utils/jwt.js";
+import { generateAccessToken, generateRefreshToken } from "../utils/jwt.js";
 import type { JWTPayload, User } from "../types/index.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { AppError } from "../utils/AppError.js";
@@ -14,10 +14,15 @@ export const refresh = asyncHandler(async (req: Request, res: Response) => {
         throw new AppError("Refresh token is required", 400);
     }
 
-    const decoded = jwt.verify(
-        refreshToken,
-        process.env.JWT_REFRESH_SECRET as string
-    ) as JWTPayload;
+    let decoded: JWTPayload;
+    try {
+        decoded = jwt.verify(
+            refreshToken,
+            process.env.JWT_REFRESH_SECRET as string
+        ) as JWTPayload;
+    } catch (err) {
+        throw new AppError("Invalid or expired refresh token", 403);
+    }
 
     const userId = decoded.userId;
 
@@ -40,9 +45,22 @@ export const refresh = asyncHandler(async (req: Request, res: Response) => {
         throw new AppError("Invalid refresh token", 403);
     }
 
-    const accessToken = generateAccessToken({
-        id: userId
-    } as User);
+    // rotation: delete the used refresh token
+    await pool.query("DELETE FROM refresh_tokens WHERE id=$1", [matchedToken.id]);
 
-    res.json({ accessToken });
+    const user: User = { id: userId } as User;
+    const accessToken = generateAccessToken(user);
+    const newRefreshToken = generateRefreshToken(user);
+
+    // Hash and save the new refresh token
+    const hashedToken = await bcrypt.hash(newRefreshToken, 10);
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + 7);
+
+    await pool.query(
+        "INSERT INTO refresh_tokens (user_id, token, expires_at) VALUES ($1, $2, $3)",
+        [userId, hashedToken, expiresAt]
+    );
+
+    res.json({ accessToken, refreshToken: newRefreshToken });
 });
