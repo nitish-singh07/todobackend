@@ -16,8 +16,17 @@ export const appleAuth = asyncHandler(async (req, res) => {
     const userQuery = await pool.query("SELECT id, provider, provider_id, email, name FROM users WHERE provider=$1 AND provider_id=$2", ["apple", sub]);
     let user;
     if (userQuery.rows.length === 0) {
-        const newUser = await pool.query("INSERT INTO users (provider, provider_id, email) VALUES ($1, $2, $3) RETURNING id, provider, provider_id, email, name", ["apple", sub, email]);
-        user = newUser.rows[0];
+        // Check if a user with this email already exists
+        const emailCheck = await pool.query("SELECT id, provider, provider_id, email, name FROM users WHERE email = $1", [email]);
+        if (emailCheck.rows.length > 0) {
+            // Found existing account by email, use it to login
+            user = emailCheck.rows[0];
+        }
+        else {
+            // New user, insert them
+            const newUser = await pool.query("INSERT INTO users (provider, provider_id, email) VALUES ($1, $2, $3) RETURNING id, provider, provider_id, email, name", ["apple", sub, email]);
+            user = newUser.rows[0];
+        }
     }
     else {
         user = userQuery.rows[0];

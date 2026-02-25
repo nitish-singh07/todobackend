@@ -26,8 +26,24 @@ export const googleAuth = asyncHandler(async (req, res) => {
     const userQuery = await pool.query("SELECT id, provider, provider_id, email, name FROM users WHERE provider=$1 AND provider_id=$2", ["google", sub]);
     let user;
     if (userQuery.rows.length === 0) {
-        const newUser = await pool.query("INSERT INTO users (provider, provider_id, email, name) VALUES ($1, $2, $3, $4) RETURNING id, provider, provider_id, email, name", ["google", sub, email, name]);
-        user = newUser.rows[0];
+        // Check if a user with this email already exists under a different provider (e.g., email/password)
+        const emailCheck = await pool.query("SELECT * FROM users WHERE email = $1", [email]);
+        if (emailCheck.rows.length > 0) {
+            // User exists! Let's just use this account.
+            user = emailCheck.rows[0];
+            // Optional: Update provider info if you want to "link" it permanently to Google
+            // For now, we'll just log them in to provide the smoothest experience.
+            // Also, update the name if it's missing in the existing user record
+            if (!user.name && name) {
+                await pool.query("UPDATE users SET name = $1 WHERE id = $2", [name, user.id]);
+                user.name = name; // Update the user object in memory too
+            }
+        }
+        else {
+            // New user, create them
+            const newUser = await pool.query("INSERT INTO users (provider, provider_id, email, name) VALUES ($1, $2, $3, $4) RETURNING id, provider, provider_id, email, name", ["google", sub, email, name]);
+            user = newUser.rows[0];
+        }
     }
     else {
         user = userQuery.rows[0];

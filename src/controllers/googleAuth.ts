@@ -40,7 +40,7 @@ export const googleAuth = asyncHandler(async (req: Request, res: Response) => {
 
     if (userQuery.rows.length === 0) {
         // Check if a user with this email already exists under a different provider (e.g., email/password)
-        const emailCheck = await pool.query("SELECT id, provider, provider_id, email, name FROM users WHERE email = $1", [email]);
+        const emailCheck = await pool.query("SELECT * FROM users WHERE email = $1", [email]);
 
         if (emailCheck.rows.length > 0) {
             // User exists! Let's just use this account.
