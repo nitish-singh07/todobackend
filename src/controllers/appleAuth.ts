@@ -28,6 +28,19 @@ export const appleAuth = asyncHandler(async (req: Request, res: Response) => {
     let user: User;
 
     if (userQuery.rows.length === 0) {
+        // Check if a user with this email already exists under a different provider
+        const emailCheck = await pool.query("SELECT * FROM users WHERE email = $1", [email]);
+        if (emailCheck.rows.length > 0) {
+            const existingProvider = emailCheck.rows[0].provider;
+            const providerName = existingProvider === 'email' ? 'Email/Password' :
+                existingProvider.charAt(0).toUpperCase() + existingProvider.slice(1);
+
+            throw new AppError(
+                `An account with this email already exists using ${providerName}. Please sign in using that method instead.`,
+                400
+            );
+        }
+
         const newUser = await pool.query(
             "INSERT INTO users (provider, provider_id, email) VALUES ($1, $2, $3) RETURNING id, provider, provider_id, email, name",
             ["apple", sub, email]
